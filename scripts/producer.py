@@ -1,26 +1,28 @@
-from kafka import KafkaProducer
-import json
 import pandas as pd
+from sklearn.model_selection import train_test_split
+from xgboost import XGBRegressor
+from sklearn.metrics import r2_score
+import pickle
 
-def send_data_to_kafka():
-    # Cargar datos transformados
-    X_test = pd.read_csv('../data/processed/transformed_data.csv')
-    selected_features = ['GDP_per_capita', 'Life_Expectancy', 'Social_Support', 'Freedom']
+# Cargar dataset limpio
+df = pd.read_csv('../data/clean_dataset.csv')
 
-    # Configurar productor de Kafka
-    producer = KafkaProducer(
-        bootstrap_servers='localhost:9092',
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
+# Dividir datos (70%-30%)
+X = df.drop(columns=['Happiness_Score'])
+y = df['Happiness_Score']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
 
-    # Enviar datos al tópico
-    for _, row in X_test.iterrows():
-        data = row.to_dict()
-        producer.send('datos_felicidad', value=data)
-        print(f'Enviado: {data}')
-    producer.flush()
+# Entrenar modelo XGBoost
+xgb_model = XGBRegressor(objective='reg:squarederror', random_state=42)
+xgb_model.fit(X_train, y_train)
 
-    print('Todos los datos enviados a Kafka.')
+# Evaluar modelo
+y_pred = xgb_model.predict(X_test)
+r2 = r2_score(y_test, y_pred)
+print(f'R² Score (model_prediction.py): {r2}')
 
-if __name__ == '__main__':
-    send_data_to_kafka()
+# Guardar modelo
+with open('../models/xgb_model.pkl', 'wb') as file:
+    pickle.dump(xgb_model, file)
+
+print("Modelo entrenado y guardado como xgb_model.pkl")

@@ -1,39 +1,96 @@
 import pandas as pd
+import numpy as np
+from sklearn.decomposition import PCA
+from sklearn.model_selection import train_test_split
+from confluent_kafka import Producer
+import json
 
-def preprocess_data():
-    # Cargar datos
-    df_2015 = pd.read_csv('../data/raw/happiness_2015.csv')
-    df_2016 = pd.read_csv('../data/raw/happiness_2016.csv')
-    df_2017 = pd.read_csv('../data/raw/happiness_2017.csv')
-    df_2018 = pd.read_csv('../data/raw/happiness_2018.csv')
-    df_2019 = pd.read_csv('../data/raw/happiness_2019.csv')
+# Cargar datasets
+files = ['2015.csv', '2016.csv', '2017.csv', '2018.csv', '2019.csv']
+dataframes = []
+for i, file in enumerate(files):
+    df = pd.read_csv(f'../data/{file}')
+    year = 2015 + i
+    # Estandarizar nombres de columnas
+    if year == 2015:
+        df = df.rename(columns={
+            'Country': 'Country_or_region', 'Happiness Rank': 'Happiness_Rank',
+            'Happiness Score': 'Happiness_Score', 'Economy (GDP per Capita)': 'GDP_per_capita',
+            'Family': 'Social_support', 'Health (Life Expectancy)': 'Healthy_life_expectancy',
+            'Trust (Government Corruption)': 'Perceptions_of_corruption'
+        })
+    elif year == 2016:
+        df = df.rename(columns={
+            'Country': 'Country_or_region', 'Happiness Rank': 'Happiness_Rank',
+            'Happiness Score': 'Happiness_Score', 'Economy (GDP per Capita)': 'GDP_per_capita',
+            'Family': 'Social_support', 'Health (Life Expectancy)': 'Healthy_life_expectancy',
+            'Trust (Government Corruption)': 'Perceptions_of_corruption'
+        })
+    elif year == 2017:
+        df = df.rename(columns={
+            'Country': 'Country_or_region', 'Happiness.Rank': 'Happiness_Rank',
+            'Happiness.Score': 'Happiness_Score', 'Economy..GDP.per.Capita.': 'GDP_per_capita',
+            'Family': 'Social_support', 'Health..Life.Expectancy.': 'Healthy_life_expectancy',
+            'Trust..Government.Corruption.': 'Perceptions_of_corruption'
+        })
+    elif year in [2018, 2019]:
+        df = df.rename(columns={
+            'Country or region': 'Country_or_region', 'Overall rank': 'Happiness_Rank',
+            'Score': 'Happiness_Score', 'GDP per capita': 'GDP_per_capita',
+            'Social support': 'Social_support', 'Healthy life expectancy': 'Healthy_life_expectancy',
+            'Perceptions of corruption': 'Perceptions_of_corruption',
+            'Freedom to make life choices': 'Freedom'
+        })
+    df['Year'] = year
+    dataframes.append(df)
 
-    # Seleccionar columnas comunes
-    selected_features = ['GDP_per_capita', 'Life_Expectancy', 'Social_Support', 'Freedom']
-    common_columns = selected_features + ['Happiness_Score']
+# Combinar datasets
+df = pd.concat(dataframes, ignore_index=True)
 
-    # Agregar columna de año
-    df_2015['Year'] = 2015
-    df_2016['Year'] = 2016
-    df_2017['Year'] = 2017
-    df_2018['Year'] = 2018
-    df_2019['Year'] = 2019
+# Manejo de valores nulos
+df['Perceptions_of_corruption'] = df['Perceptions_of_corruption'].fillna(df['Perceptions_of_corruption'].mean())
 
-    # Combinar datos
-    combined_df = pd.concat([
-        df_2015[common_columns + ['Year']],
-        df_2016[common_columns + ['Year']],
-        df_2017[common_columns + ['Year']],
-        df_2018[common_columns + ['Year']],
-        df_2019[common_columns + ['Year']]
-    ], ignore_index=True)
+# Feature Engineering: Crear Economic_Health_Index con PCA
+pca = PCA(n_components=1)
+df['Economic_Health_Index'] = pca.fit_transform(df[['GDP_per_capita', 'Healthy_life_expectancy']])
 
-    # Manejar valores faltantes
-    combined_df.fillna(combined_df.mean(), inplace=True)
+# Mapeo de regiones
+region_mapping = {
+    'Switzerland': 'Western Europe', 'Iceland': 'Western Europe', 'Denmark': 'Western Europe',
+    # Añade el mapeo completo aquí (puedes copiarlo del notebook 001-EDA (2).ipynb)
+    # Por brevedad, asumo que tienes el diccionario completo
+}
+df['Region'] = df['Country_or_region'].map(region_mapping).fillna('Other')
 
-    # Guardar datos combinados
-    combined_df.to_csv('../data/processed/combined_data.csv', index=False)
-    print('Datos preprocesados y guardados en ../data/processed/combined_data.csv')
+# Codificación one-hot
+df = pd.get_dummies(df, columns=['Region', 'Year'], prefix=['region', 'Year'])
 
-if __name__ == '__main__':
-    preprocess_data()
+# Eliminar columnas innecesarias
+df = df.drop(columns=['Country_or_region', 'GDP_per_capita', 'Healthy_life_expectancy', 'Generosity'])
+
+# Guardar dataset limpio
+df.to_csv('../data/clean_dataset.csv', index=False)
+
+# Dividir datos (70%-30%)
+X = df.drop(columns=['Happiness_Score'])
+y = df['Happiness_Score']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Configurar productor Kafka
+conf = {'bootstrap.servers': 'localhost:9092'}
+producer = Producer(conf)
+
+def delivery_report(err, msg):
+    if err is not None:
+        print(f'Message delivery failed: {err}')
+    else:
+        print(f'Message delivered to {msg.topic()} [{msg.partition()}]')
+
+# Enviar X_test a Kafka
+for index, row in X_test.iterrows():
+    data = row.to_dict()
+    data_json = json.dumps(data)
+    producer.produce('happiness_data', value=data_json.encode('utf-8'), callback=delivery_report)
+    producer.flush()
+
+print("Datos de prueba enviados a Kafka.")

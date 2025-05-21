@@ -1,119 +1,128 @@
-from confluent_kafka import Consumer, KafkaError
-import pickle
+from kafka import KafkaConsumer
 import pandas as pd
 import json
 import sqlite3
+import pickle
 from sklearn.metrics import r2_score
+import warnings
+from time import sleep
 
-# Configuración del consumidor
-conf = {
-    'bootstrap.servers': 'localhost:9092',
-    'group.id': 'happiness_group',
-    'auto.offset.reset': 'earliest'
-}
-consumer = Consumer(conf)
-consumer.subscribe(['happiness_data'])
+# Ignorar advertencias
+warnings.filterwarnings('ignore', category=UserWarning)
 
-# Cargar modelo
-with open('../models/xgb_model.pkl', 'rb') as file:
-    xgb_model = pickle.load(file)
+# Configuración de Kafka
+KAFKA_BOOTSTRAP_SERVERS = ['localhost:9092']  # Cambiar por tu servidor Kafka
+TOPIC_NAME = 'happiness_data'
 
-# Conectar a SQLite
-conn = sqlite3.connect('../data/happiness_predictions.db')
+# Cargar el modelo entrenado
+with open('../models/catboost_model.pkl', 'rb') as file:
+    cat_model = pickle.load(file)
+
+# Conectar a la base de datos SQLite
+conn = sqlite3.connect('happiness_predictions.db')
 cursor = conn.cursor()
 
-# Crear tabla
+# Crear tabla si no existe
 cursor.execute('''
     CREATE TABLE IF NOT EXISTS predictions (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        Freedom FLOAT,
-        Happiness_Rank INTEGER,
-        Perceptions_of_corruption FLOAT,
-        Social_support FLOAT,
-        Economic_Health_Index FLOAT,
-        region_Australia_and_New_Zealand INTEGER,
-        region_Central_and_Eastern_Europe INTEGER,
-        region_Eastern_Asia INTEGER,
-        region_Latin_America_and_Caribbean INTEGER,
-        region_Middle_East_and_Northern_Africa INTEGER,
-        region_North_America INTEGER,
-        region_Southeastern_Asia INTEGER,
-        region_Southern_Asia INTEGER,
-        region_Sub_Saharan_Africa INTEGER,
-        region_Western_Europe INTEGER,
-        Year_Year_2015 INTEGER,
-        Year_Year_2016 INTEGER,
-        Year_Year_2017 INTEGER,
-        Year_Year_2018 INTEGER,
-        Year_Year_2019 INTEGER,
-        Predicted_Happiness_Score FLOAT
+        Freedom REAL,
+        Generosity REAL,
+        Perceptions_of_corruption REAL,
+        GDP_per_capita REAL,
+        Healthy_life_expectancy REAL,
+        Social_support REAL,
+        Year INTEGER,
+        Region_Australia_and_New_Zealand INTEGER,
+        Region_Central_and_Eastern_Europe INTEGER,
+        Region_Eastern_Asia INTEGER,
+        Region_Latin_America_and_Caribbean INTEGER,
+        Region_Middle_East_and_Northern_Africa INTEGER,
+        Region_North_America INTEGER,
+        Region_Southeastern_Asia INTEGER,
+        Region_Southern_Asia INTEGER,
+        Region_Sub-Saharan_Africa INTEGER,
+        Region_Western_Europe INTEGER,
+        Happiness_Score_Predicted REAL,
+        Happiness_Score_Actual REAL
     )
 ''')
 conn.commit()
 
-# Listas para evaluación
+# Inicializar consumidor Kafka
+consumer = KafkaConsumer(
+    TOPIC_NAME,
+    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+    auto_offset_reset='earliest',
+    value_deserializer=lambda m: json.loads(m.decode('utf-8'))
+)
+
+# Lista para almacenar predicciones y valores reales
 predictions = []
-true_values = []
+actuals = []
 
-# Cargar y_test
-df = pd.read_csv('../data/clean_dataset.csv')
-X = df.drop(columns=['Happiness_Score'])
-y = df['Happiness_Score']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
-
-# Consumir mensajes
-while True:
-    msg = consumer.poll(1.0)
-    if msg is None:
-        continue
-    if msg.error():
-        if msg.error().code() == KafkaError._PARTITION_EOF:
-            continue
-        else:
-            print(msg.error())
-            break
-
-    # Procesar mensaje
-    data_json = msg.value().decode('utf-8')
-    data = json.loads(data_json)
-    input_data = pd.DataFrame([data])
-    prediction = xgb_model.predict(input_data)[0]
+# Consumir mensajes y realizar predicciones
+for message in consumer:
+    data = message.value
+    print(f"Datos recibidos: {data}")
     
-    # Almacenar en la base de datos
+    # Extraer características (excluyendo Happiness_Score para predicción)
+    features = {k: v for k, v in data.items() if k != 'Happiness_Score'}
+    
+    # Convertir características a DataFrame para predicción
+    row_df = pd.DataFrame([features], columns=features.keys())
+    
+    # Realizar predicción
+    pred = cat_model.predict(row_df)[0]
+    
+    # Obtener el valor real desde los datos recibidos
+    actual = data['Happiness_Score'] if 'Happiness_Score' in data else None
+    
+    # Si no hay Happiness_Score (por error), usar un valor nulo o promedio (simulación)
+    if actual is None:
+        actual = 0.0  # Valor placeholder; en producción, manejar este caso
+    
+    # Almacenar en base de datos
     cursor.execute('''
         INSERT INTO predictions (
-            Freedom, Happiness_Rank, Perceptions_of_corruption, Social_support,
-            Economic_Health_Index, region_Australia_and_New_Zealand,
-            region_Central_and_Eastern_Europe, region_Eastern_Asia,
-            region_Latin_America_and_Caribbean, region_Middle_East_and_Northern_Africa,
-            region_North_America, region_Southeastern_Asia, region_Southern_Asia,
-            region_Sub_Saharan_Africa, region_Western_Europe, Year_Year_2015,
-            Year_Year_2016, Year_Year_2017, Year_Year_2018, Year_Year_2019,
-            Predicted_Happiness_Score
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            Freedom, Generosity, Perceptions_of_corruption, GDP_per_capita,
+            Healthy_life_expectancy, Social_support, Year,
+            Region_Australia_and_New_Zealand, Region_Central_and_Eastern_Europe,
+            Region_Eastern_Asia, Region_Latin_America_and_Caribbean,
+            Region_Middle_East_and_Northern_Africa, Region_North_America,
+            Region_Southeastern_Asia, Region_Southern_Asia, Region_Sub-Saharan_Africa,
+            Region_Western_Europe, Happiness_Score_Predicted, Happiness_Score_Actual
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
-        data['Freedom'], data['Happiness_Rank'], data['Perceptions_of_corruption'],
-        data['Social_support'], data['Economic_Health_Index'],
-        data['region_Australia and New Zealand'], data['region_Central and Eastern Europe'],
-        data['region_Eastern Asia'], data['region_Latin America and Caribbean'],
-        data['region_Middle East and Northern Africa'], data['region_North America'],
-        data['region_Southeastern Asia'], data['region_Southern Asia'],
-        data['region_Sub-Saharan Africa'], data['region_Western Europe'],
-        data['Year_Year_2015'], data['Year_Year_2016'], data['Year_Year_2017'],
-        data['Year_Year_2018'], data['Year_Year_2019'], prediction
+        data['Freedom'], data['Generosity'], data['Perceptions_of_corruption'],
+        data['GDP_per_capita'], data['Healthy_life_expectancy'], data['Social_support'],
+        data['Year'], data['Region_Australia_and_New_Zealand'],
+        data['Region_Central_and_Eastern_Europe'], data['Region_Eastern_Asia'],
+        data['Region_Latin_America_and_Caribbean'], data['Region_Middle_East_and_Northern_Africa'],
+        data['Region_North_America'], data['Region_Southeastern_Asia'],
+        data['Region_Southern_Asia'], data['Region_Sub-Saharan_Africa'],
+        data['Region_Western_Europe'], pred, actual
     ))
     conn.commit()
-    
-    # Almacenar para evaluación
-    index = input_data.index[0]
-    true_value = y_test.loc[index]
-    predictions.append(prediction)
-    true_values.append(true_value)
 
-# Calcular R²
-r2 = r2_score(true_values, predictions)
-print(f'R² Score (consumer.py): {r2}')
+    predictions.append(pred)
+    actuals.append(actual)
+    print(f"Predicción: {pred}, Valor real: {actual}")
 
-# Cerrar conexiones
+# Calcular métrica de rendimiento
+if actuals and predictions:  # Verificar que haya datos
+    r2 = r2_score(actuals, predictions)
+    print(f"R2 Score: {r2:.4f}")
+else:
+    print("No se recibieron suficientes datos para calcular R2 Score.")
+
+# Cerrar conexión
+conn.close()
 consumer.close()
+
+# Verificar datos almacenados
+conn = sqlite3.connect('happiness_predictions.db')
+sample_data = pd.read_sql_query("SELECT * FROM predictions LIMIT 5", conn)
+print("\nPrimeras 5 filas de la base de datos:")
+print(sample_data)
 conn.close()

@@ -1,28 +1,32 @@
-import pandas as pd
-from sklearn.model_selection import train_test_split
-from xgboost import XGBRegressor
-from sklearn.metrics import r2_score
-import pickle
+from kafka import KafkaProducer
+import json
+from time import sleep
 
-# Cargar dataset limpio
-df = pd.read_csv('../data/clean_dataset.csv')
+# Configuración de Kafka
+KAFKA_BOOTSTRAP_SERVERS = ['localhost:9092']  # Cambiar por tu servidor Kafka
+TOPIC_NAME = 'happiness_data'
 
-# Dividir datos (70%-30%)
-X = df.drop(columns=['Happiness_Score'])
-y = df['Happiness_Score']
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+# Inicializar productor Kafka
+producer = KafkaProducer(
+    bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+    value_serializer=lambda v: json.dumps(v).encode('utf-8')
+)
 
-# Entrenar modelo XGBoost
-xgb_model = XGBRegressor(objective='reg:squarederror', random_state=42)
-xgb_model.fit(X_train, y_train)
+# Leer datos transformados generados por feature_selection.py
+with open('transformed_data.json', 'r') as f:
+    data = json.load(f)
 
-# Evaluar modelo
-y_pred = xgb_model.predict(X_test)
-r2 = r2_score(y_test, y_pred)
-print(f'R² Score (model_prediction.py): {r2}')
+# Enviar cada fila al topic de Kafka
+for row in data:
+    try:
+        producer.send(TOPIC_NAME, value=row)
+        print(f"Enviando datos para índice {data.index(row)}")
+        sleep(0.1)  # Simular retraso en streaming
+    except Exception as e:
+        print(f"Error al enviar mensaje: {e}")
 
-# Guardar modelo
-with open('../models/xgb_model.pkl', 'wb') as file:
-    pickle.dump(xgb_model, file)
+# Cerrar productor
+producer.flush()
+producer.close()
 
-print("Modelo entrenado y guardado como xgb_model.pkl")
+print("Transmisión de datos completada.")

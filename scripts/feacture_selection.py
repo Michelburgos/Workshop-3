@@ -1,17 +1,18 @@
 import pandas as pd
 import json
 import logging
+from sklearn.model_selection import train_test_split
 
 # Configurar logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 # Lista de archivos CSV originales
 csv_files = {
-    2015: "data/2015.csv",
-    2016: "data/2016.csv",
-    2017: "data/2017.csv",
-    2018: "data/2018.csv",
-    2019: "data/2019.csv",
+    2015: "../data/2015.csv",
+    2016: "../data/2016.csv",
+    2017: "../data/2017.csv",
+    2018: "../data/2018.csv",
+    2019: "../data/2019.csv",
 }
 
 # Mapeo de columnas por año para estandarizar nombres
@@ -85,6 +86,11 @@ for year, filepath in csv_files.items():
 # Unificar los DataFrames
 df = pd.concat(dfs, ignore_index=True)
 
+selected_features = ['Freedom', 'Generosity', 'Happiness_Rank', 'Country_or_region',
+                     'Perceptions_of_corruption', 'GDP_per_capita', 'Healthy_life_expectancy',
+                     'Happiness_Score', 'Social_support', 'Year', 'Region']
+
+df = df[selected_features]
 # Imputar valor faltante
 imputed_value = (0.32449 + 0.182) / 2
 df.loc[(df['Country_or_region'] == 'United Arab Emirates') & (df['Year'] == 2018), 'Perceptions_of_corruption'] = imputed_value
@@ -132,21 +138,21 @@ region_mapping = {
          'Taiwan': 'Eastern Asia', 'Japan': 'Eastern Asia', 'South Korea': 'Eastern Asia', 'Hong Kong': 'Eastern Asia',
          'China': 'Eastern Asia', 'Mongolia': 'Eastern Asia', 'Taiwan Province of China': 'Eastern Asia',
          'Hong Kong S.A.R., China': 'Eastern Asia',
-         'Nigeria': 'Sub-Saharan Africa', 'Zambia': 'Sub-Saharan Africa', 'Mozambique': 'Sub-Saharan Africa', 'Lesotho': 'Sub-Saharan Africa',
-         'Swaziland': 'Sub-Saharan Africa', 'South Africa': 'Sub-Saharan Africa', 'Ghana': 'Sub-Saharan Africa', 'Zimbabwe': 'Sub-Saharan Africa',
-         'Liberia': 'Sub-Saharan Africa', 'Sudan': 'Sub-Saharan Africa', 'Congo (Kinshasa)': 'Sub-Saharan Africa', 'Ethiopia': 'Sub-Saharan Africa',
-         'Sierra Leone': 'Sub-Saharan Africa', 'Mauritania': 'Sub-Saharan Africa', 'Kenya': 'Sub-Saharan Africa', 'Djibouti': 'Sub-Saharan Africa',
-         'Botswana': 'Sub-Saharan Africa', 'Malawi': 'Sub-Saharan Africa', 'Cameroon': 'Sub-Saharan Africa', 'Angola': 'Sub-Saharan Africa',
-         'Mali': 'Sub-Saharan Africa', 'Congo (Brazzaville)': 'Sub-Saharan Africa', 'Comoros': 'Sub-Saharan Africa', 'Uganda': 'Sub-Saharan Africa',
-         'Senegal': 'Sub-Saharan Africa', 'Gabon': 'Sub-Saharan Africa', 'Niger': 'Sub-Saharan Africa', 'Tanzania': 'Sub-Saharan Africa',
-         'Madagascar': 'Sub-Saharan Africa', 'Central African Republic': 'Sub-Saharan Africa', 'Chad': 'Sub-Saharan Africa',
-         'Guinea': 'Sub-Saharan Africa', 'Ivory Coast': 'Sub-Saharan Africa', 'Burkina Faso': 'Sub-Saharan Africa', 'Rwanda': 'Sub-Saharan Africa',
-         'Benin': 'Sub-Saharan Africa', 'Burundi': 'Sub-Saharan Africa', 'Togo': 'Sub-Saharan Africa', 'Mauritius': 'Sub-Saharan Africa',
-         'Somalia': 'Sub-Saharan Africa', 'Namibia': 'Sub-Saharan Africa', 'South Sudan': 'Sub-Saharan Africa', 'Somaliland Region': 'Sub-Saharan Africa',
-         'Gambia': 'Sub-Saharan Africa',
+         'Nigeria': 'Sub_Saharan Africa', 'Zambia': 'Sub_Saharan Africa', 'Mozambique': 'Sub_Saharan Africa', 'Lesotho': 'Sub_Saharan Africa',
+         'Swaziland': 'Sub_Saharan Africa', 'South Africa': 'Sub_Saharan Africa', 'Ghana': 'Sub_Saharan Africa', 'Zimbabwe': 'Sub_Saharan Africa',
+         'Liberia': 'Sub_Saharan Africa', 'Sudan': 'Sub_Saharan Africa', 'Congo (Kinshasa)': 'Sub_Saharan Africa', 'Ethiopia': 'Sub_Saharan Africa',
+         'Sierra Leone': 'Sub_Saharan Africa', 'Mauritania': 'Sub_Saharan Africa', 'Kenya': 'Sub_Saharan Africa', 'Djibouti': 'Sub_Saharan Africa',
+         'Botswana': 'Sub_Saharan Africa', 'Malawi': 'Sub_Saharan Africa', 'Cameroon': 'Sub_Saharan Africa', 'Angola': 'Sub_Saharan Africa',
+         'Mali': 'Sub_Saharan Africa', 'Congo (Brazzaville)': 'Sub_Saharan Africa', 'Comoros': 'Sub_Saharan Africa', 'Uganda': 'Sub_Saharan Africa',
+         'Senegal': 'Sub_Saharan Africa', 'Gabon': 'Sub_Saharan Africa', 'Niger': 'Sub_Saharan Africa', 'Tanzania': 'Sub_Saharan Africa',
+         'Madagascar': 'Sub_Saharan Africa', 'Central African Republic': 'Sub_Saharan Africa', 'Chad': 'Sub_Saharan Africa',
+         'Guinea': 'Sub_Saharan Africa', 'Ivory Coast': 'Sub_Saharan Africa', 'Burkina Faso': 'Sub_Saharan Africa', 'Rwanda': 'Sub_Saharan Africa',
+         'Benin': 'Sub_Saharan Africa', 'Burundi': 'Sub_Saharan Africa', 'Togo': 'Sub_Saharan Africa', 'Mauritius': 'Sub_Saharan Africa',
+         'Somalia': 'Sub_Saharan Africa', 'Namibia': 'Sub_Saharan Africa', 'South Sudan': 'Sub_Saharan Africa', 'Somaliland Region': 'Sub_Saharan Africa',
+         'Gambia': 'Sub_Saharan Africa',
          'Bhutan': 'Southern Asia', 'Pakistan': 'Southern Asia', 'Bangladesh': 'Southern Asia', 'India': 'Southern Asia',
          'Nepal': 'Southern Asia', 'Sri Lanka': 'Southern Asia', 'Afghanistan': 'Southern Asia', 'Lithuania': 'Central and Eastern Europe',
-         'Somaliland region': 'Sub-Saharan Africa'
+         'Somaliland region': 'Sub_Saharan Africa'
 }
 
 # Agregar columna Region
@@ -168,12 +174,23 @@ df = df.drop(columns=['Country_or_region', 'Happiness_Rank'], errors='ignore')
 df_encoded = df_encoded.drop(columns=['Country_or_region', 'Happiness_Rank'], errors='ignore')
 
 # Convertir booleanos a enteros
-for col in df_encoded.columns:
-    if df_encoded[col].dtype == bool:
-        df_encoded[col] = df_encoded[col].astype(int)
+for col in df_encoded.select_dtypes(include='bool').columns:
+    df_encoded[col] = df_encoded[col].astype(int)
+
+
+# Dividir los datos en entrenamiento (70%) y prueba (30%)
+X = df_encoded.drop(columns=['Happiness_Score'])
+y = df_encoded['Happiness_Score']
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=50)
+logging.info(f"Datos divididos: {len(X_train)} para entrenamiento, {len(X_test)} para prueba")
+
+# Combinar X_test y y_test para guardar el conjunto de prueba
+test_data = X_test.copy()
+test_data['Happiness_Score'] = y_test
+
 
 # Guardar a JSON
-with open('data/transformed_data.json', 'w') as f:
-    json.dump(df_encoded.to_dict(orient='records'), f)
+with open('../data/transformed_data.json', 'w') as f:
+    json.dump(test_data.to_dict(orient='records'), f)
 
 logging.info("Datos transformados generados y listos para streaming.")

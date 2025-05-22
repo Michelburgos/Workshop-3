@@ -6,30 +6,43 @@ import logging
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 from sqlalchemy import text
-from db_connection import get_connection, close_connection
+from sklearn.metrics import r2_score
 
-# Configurar logging
+import sys
+import os
+
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+from database.db_connection import get_connection, close_connection
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
-
-# Ignorar advertencias
 warnings.filterwarnings('ignore', category=UserWarning)
 
-# Configuración de Kafka
-KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092'] 
+KAFKA_BOOTSTRAP_SERVERS = ['localhost:29092']
 TOPIC_NAME = 'happiness_data'
 
-# Columnas esperadas para la predicción
-REQUIRED_FEATURES = [
-    'Freedom', 'Generosity', 'Perceptions_of_corruption', 'GDP_per_capita',
-    'Healthy_life_expectancy', 'Social_support', 'Year',
-    'Region_Australia_and_New_Zealand', 'Region_Central_and_Eastern_Europe',
-    'Region_Eastern_Asia', 'Region_Latin_America_and_Caribbean',
-    'Region_Middle_East_and_Northern_Africa', 'Region_North_America',
-    'Region_Southeastern_Asia', 'Region_Southern_Asia', 'Region_Sub-Saharan_Africa',
-    'Region_Western_Europe'
-]
+COLUMN_MAP = {
+    'Freedom': 'freedom',
+    'Generosity': 'generosity',
+    'Perceptions_of_corruption': 'perceptions_of_corruption',
+    'GDP_per_capita': 'gdp_per_capita',
+    'Healthy_life_expectancy': 'healthy_life_expectancy',
+    'Social_support': 'social_support',
+    'Year': 'year',
+    'Region_Australia_and_New_Zealand': 'region_australia_and_new_zealand',
+    'Region_Central_and_Eastern_Europe': 'region_central_and_eastern_europe',
+    'Region_Eastern_Asia': 'region_eastern_asia',
+    'Region_Latin_America_and_Caribbean': 'region_latin_america_and_caribbean',
+    'Region_Middle_East_and_Northern_Africa': 'region_middle_east_and_northern_africa',
+    'Region_North_America': 'region_north_america',
+    'Region_Southeastern_Asia': 'region_southeastern_asia',
+    'Region_Southern_Asia': 'region_southern_asia',
+    'Region_Sub_Saharan_Africa': 'region_sub_saharan_africa',
+    'Region_Western_Europe': 'region_western_europe',
+}
 
-# Cargar el modelo entrenado
+REQUIRED_FEATURES = list(COLUMN_MAP.keys())
+
 try:
     with open('../models/catboost_model.pkl', 'rb') as file:
         cat_model = pickle.load(file)
@@ -41,89 +54,91 @@ except Exception as e:
     logging.error(f"Error al cargar el modelo: {e}")
     exit(1)
 
-# Conectar a la base de datos PostgreSQL
+engine = None
+
 try:
     engine = get_connection()
-    # Crear tabla si no existe
     with engine.connect() as conn:
         conn.execute(text("""
             CREATE TABLE IF NOT EXISTS predictions (
-                id SERIAL PRIMARY KEY,
-                Freedom FLOAT,
-                Generosity FLOAT,
-                Perceptions_of_corruption FLOAT,
-                GDP_per_capita FLOAT,
-                Healthy_life_expectancy FLOAT,
-                Social_support FLOAT,
-                Year INTEGER,
-                Region_Australia_and_New_Zealand INTEGER,
-                Region_Central_and_Eastern_Europe INTEGER,
-                Region_Eastern_Asia INTEGER,
-                Region_Latin_America_and_Caribbean INTEGER,
-                Region_Middle_East_and_Northern_Africa INTEGER,
-                Region_North_America INTEGER,
-                Region_Southeastern_Asia INTEGER,
-                Region_Southern_Asia INTEGER,
-                Region_Sub-Saharan_Africa INTEGER,
-                Region_Western_Europe INTEGER,
-                Happiness_Score_Predicted FLOAT,
-                Happiness_Score_Actual FLOAT
+                freedom DOUBLE PRECISION,
+                generosity DOUBLE PRECISION,
+                perceptions_of_corruption DOUBLE PRECISION,
+                gdp_per_capita DOUBLE PRECISION,
+                healthy_life_expectancy DOUBLE PRECISION,
+                social_support DOUBLE PRECISION,
+                year INTEGER,
+                region_australia_and_new_zealand INTEGER,
+                region_central_and_eastern_europe INTEGER,
+                region_eastern_asia INTEGER,
+                region_latin_america_and_caribbean INTEGER,
+                region_middle_east_and_northern_africa INTEGER,
+                region_north_america INTEGER,
+                region_southeastern_asia INTEGER,
+                region_southern_asia INTEGER,
+                region_sub_saharan_africa INTEGER,
+                region_western_europe INTEGER,
+                happiness_score_predicted DOUBLE PRECISION,
+                happiness_score_actual DOUBLE PRECISION
             )
         """))
-        conn.commit()
-    logging.info("Tabla 'predictions' verificada/creada exitosamente.")
+        conn.execute(text("TRUNCATE TABLE predictions"))
+    logging.info("Tabla 'predictions' verificada/creada y truncada exitosamente.")
 except Exception as e:
-    logging.error(f"Error al conectar o crear la tabla en PostgreSQL: {e}")
-    close_connection(engine)
+    logging.error(f"Error al conectar, crear la tabla o truncar en PostgreSQL: {e}")
+    if engine:
+        close_connection(engine)
     exit(1)
 
-# Inicializar consumidor Kafka
 try:
     consumer = KafkaConsumer(
         TOPIC_NAME,
         bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
         auto_offset_reset='earliest',
         value_deserializer=lambda m: json.loads(m.decode('utf-8')),
-        consumer_timeout_ms=10000  # Timeout de 10 segundos para salir si no hay mensajes
+        consumer_timeout_ms=10000
     )
     logging.info(f"Consumidor Kafka inicializado para el tema '{TOPIC_NAME}'.")
 except KafkaError as e:
     logging.error(f"Error al conectar con Kafka: {e}")
-    close_connection(engine)
+    if engine:
+        close_connection(engine)
     exit(1)
 
-# Consumir mensajes y realizar predicciones
+def transform_keys(data: dict) -> dict:
+    return {COLUMN_MAP.get(k, k): v for k, v in data.items() if k in COLUMN_MAP}
+
+predictions = []
+actuals = []
+
 try:
     for message in consumer:
         try:
             data = message.value
             logging.info(f"Datos recibidos: {data}")
 
-            # Verificar si todas las características requeridas están presentes
             missing_features = [feat for feat in REQUIRED_FEATURES if feat not in data]
             if missing_features:
                 logging.warning(f"Faltan características en los datos: {missing_features}. Saltando mensaje.")
                 continue
 
-            # Extraer características (excluyendo Happiness_Score para predicción)
-            features = {k: v for k, v in data.items() if k in REQUIRED_FEATURES}
+            features = {k: data[k] for k in REQUIRED_FEATURES}
+            features_df = pd.DataFrame([features], columns=REQUIRED_FEATURES)
 
-            # Convertir características a DataFrame para predicción
-            row_df = pd.DataFrame([features], columns=REQUIRED_FEATURES)
+            pred = cat_model.predict(features_df)[0]
 
-            # Realizar predicción
-            pred = cat_model.predict(row_df)[0]
-
-            # Obtener el valor real desde los datos recibidos
             actual = data.get('Happiness_Score', None)
 
-            # Preparar datos para inserción
-            insert_data = features.copy()
-            insert_data['Happiness_Score_Predicted'] = pred
-            insert_data['Happiness_Score_Actual'] = actual
+            if actual is not None:
+                predictions.append(pred)
+                actuals.append(actual)
+
+            insert_data = transform_keys(features)
+            insert_data['happiness_score_predicted'] = pred
+            insert_data['happiness_score_actual'] = actual
+
             insert_df = pd.DataFrame([insert_data])
 
-            # Almacenar en base de datos usando pandas.to_sql
             insert_df.to_sql('predictions', engine, if_exists='append', index=False)
             logging.info(f"Datos insertados en la base de datos: Predicción={pred}, Valor real={actual}")
 
@@ -138,16 +153,21 @@ except KeyboardInterrupt:
     logging.info("Consumo detenido por el usuario.")
 
 finally:
-    # Cerrar recursos
+    if predictions and actuals and len(predictions) == len(actuals):
+        r2 = r2_score(actuals, predictions)
+        logging.info(f"R² Score calculado: {r2:.4f}")
+    else:
+        logging.warning("No se recibieron suficientes datos con valores reales para calcular el R² Score.")
+
     logging.info("Cerrando conexiones...")
     try:
         consumer.close()
         logging.info("Consumidor Kafka cerrado correctamente.")
     except KafkaError as e:
         logging.error(f"Error al cerrar el consumidor Kafka: {e}")
-    close_connection(engine)
+    if engine:
+        close_connection(engine)
 
-# Verificar datos almacenados
 try:
     engine = get_connection()
     sample_data = pd.read_sql_query("SELECT * FROM predictions LIMIT 5", engine)
@@ -156,4 +176,5 @@ try:
 except Exception as e:
     logging.error(f"Error al leer datos de la base de datos: {e}")
 finally:
-    close_connection(engine)
+    if engine:
+        close_connection(engine)

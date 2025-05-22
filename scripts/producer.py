@@ -1,48 +1,63 @@
-from kafka import KafkaProducer
 import json
-from time import sleep
+import time
 import logging
+from kafka import KafkaProducer
+import os
+
+# Crear carpeta de logs si no existe
+os.makedirs("logs", exist_ok=True)
 
 # Configurar logging
-logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+logging.basicConfig(
+    filename="logs/producer.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-# Configuración de Kafka
-KAFKA_BOOTSTRAP_SERVERS = ['kafka:9092']
+KAFKA_BOOTSTRAP_SERVERS = ['localhost:29092']
 TOPIC_NAME = 'happiness_data'
+DATA_PATH = '../data/transformed_data.json'
 
-# Inicializar productor Kafka
-try:
-    producer = KafkaProducer(
-        bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
-        value_serializer=lambda v: json.dumps(v).encode('utf-8')
-    )
-    logging.info("Productor Kafka inicializado exitosamente.")
-except Exception as e:
-    logging.error(f"Error al inicializar productor Kafka: {e}")
-    exit(1)
-
-# Leer datos transformados generados por feature_selection.py
-try:
-    with open('data/transformed_data.json', 'r') as f:
-        data = json.load(f)
-    logging.info(f"Datos cargados desde data/transformed_data.json, {len(data)} registros.")
-except Exception as e:
-    logging.error(f"Error al leer transformed_data.json: {e}")
-    exit(1)
-
-# Enviar cada fila al topic de Kafka
-for i, row in enumerate(data):
+def kafka_producer():
     try:
-        producer.send(TOPIC_NAME, value=row)
-        logging.info(f"Enviando datos para índice {i}")
-        sleep(0.1)  # Simular retraso en streaming
+        producer = KafkaProducer(
+            bootstrap_servers=KAFKA_BOOTSTRAP_SERVERS,
+            value_serializer=lambda v: json.dumps(v).encode('utf-8')
+        )
+        logging.info("✅ Productor Kafka inicializado.")
+        return producer
     except Exception as e:
-        logging.warning(f"Error al enviar mensaje para índice {i}: {e}")
+        logging.error(f"❌ Error al inicializar productor Kafka: {e}")
+        raise
 
-# Cerrar productor
-try:
-    producer.flush()
-    producer.close()
-    logging.info("Transmisión de datos completada.")
-except Exception as e:
-    logging.error(f"Error al cerrar productor: {e}")
+def cargar_datos(path: str):
+    try:
+        with open(path, 'r') as f:
+            data = json.load(f)
+        logging.info(f"📄 Datos cargados desde {path}, total de registros: {len(data)}")
+        return data
+    except Exception as e:
+        logging.error(f"❌ Error al leer los datos desde {path}: {e}")
+        raise
+
+def enviar_datos_a_kafka(data: list, topic: str, sleep_seconds: float = 0.1):
+    try:
+        producer = kafka_producer()
+        logging.info("🚀 Enviando datos a Kafka...")
+
+        for i, row in enumerate(data, start=1):
+            producer.send(topic, value=row)
+            logging.info(f"📤 Enviado registro {i}")
+            time.sleep(sleep_seconds)
+
+        producer.flush()
+        producer.close()
+        logging.info("✅ Todos los registros fueron enviados correctamente.")
+    except Exception as e:
+        logging.error(f"❌ Error durante el envío de datos a Kafka: {e}")
+        raise
+
+if __name__ == "__main__":
+    datos = cargar_datos(DATA_PATH)
+    enviar_datos_a_kafka(datos, topic=TOPIC_NAME)
+

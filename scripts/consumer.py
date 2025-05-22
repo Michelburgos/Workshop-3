@@ -6,7 +6,6 @@ import logging
 from kafka import KafkaConsumer
 from kafka.errors import KafkaError
 from sqlalchemy import text
-from sklearn.metrics import r2_score
 
 import sys
 import os
@@ -108,9 +107,6 @@ except KafkaError as e:
 def transform_keys(data: dict) -> dict:
     return {COLUMN_MAP.get(k, k): v for k, v in data.items() if k in COLUMN_MAP}
 
-predictions = []
-actuals = []
-
 try:
     for message in consumer:
         try:
@@ -128,10 +124,6 @@ try:
             pred = cat_model.predict(features_df)[0]
 
             actual = data.get('Happiness_Score', None)
-
-            if actual is not None:
-                predictions.append(pred)
-                actuals.append(actual)
 
             insert_data = transform_keys(features)
             insert_data['happiness_score_predicted'] = pred
@@ -153,12 +145,6 @@ except KeyboardInterrupt:
     logging.info("Consumo detenido por el usuario.")
 
 finally:
-    if predictions and actuals and len(predictions) == len(actuals):
-        r2 = r2_score(actuals, predictions)
-        logging.info(f"R² Score calculado: {r2:.4f}")
-    else:
-        logging.warning("No se recibieron suficientes datos con valores reales para calcular el R² Score.")
-
     logging.info("Cerrando conexiones...")
     try:
         consumer.close()

@@ -3,7 +3,7 @@ __pycache__/
 *.pyc
 
 # Logs de Kafka
-kafka/logs/
+scripts/logs/
 
 # Entornos virtuales
 venv/

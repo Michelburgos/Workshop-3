@@ -67,8 +67,8 @@ Sigue estos pasos para configurar el proyecto:
 
 **Clona el repositorio:**
 ```bash
-git clone https://github.com/tu-usuario/happiness-score-workshop.git
-cd happiness-score-workshop
+git clone https://github.com/Michelburgos/Workshop-3.git
+cd Workshop-3
 ````
 
 **Crea un entorno virtual :**

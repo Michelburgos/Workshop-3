@@ -125,8 +125,9 @@ Esto inicia Kafka Y Zookeeper. Asegúrate de que los puertos (por ejemplo, 9092 
    PG_PASSWORD=<tu_contraseña>
    PG_HOST=localhost
    PG_PORT=5432
-   PG_DATABASE=<la_db_del_workshop>
-    ```
+   PG_DATABASE=<la_db_de_grammys>
+   PG_DATABASE_DIMENSIONAL=<la_db_de_merge>
+   ```
 
 ## 🎯 Cómo Ejecutar el Proyecto
 

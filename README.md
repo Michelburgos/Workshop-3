@@ -6,10 +6,10 @@ El objetivo es construir un modelo de regresión para predecir el Happiness Scor
 
 - **Análisis Exploratorio de Datos (EDA):** Explorar y comparar las características de los datasets de 2015 a 2019, ya que las columnas pueden variar entre años.
 - **ETL (Extracción, Transformación y Carga):** Extraer características relevantes de los cinco archivos CSV, limpiar y unificar los datos.
-- **Entrenamiento del Modelo:** Entrenar un modelo de regresión (usando CatBoost) con una división de datos 70% (entrenamiento) y 30% (prueba).
+- **Entrenamiento del Modelo:** Entrenar un modelo de regresión con una división de datos 70% (entrenamiento) y 30% (prueba).
 - **Streaming con Kafka:** Transmitir los datos transformados usando un producer y consumirlos con un consumer para realizar predicciones.
 - **Predicciones y Almacenamiento:** Usar el modelo entrenado para predecir el Happiness Score en el conjunto de prueba y almacenar las predicciones junto con las características en una base de datos.
-- **Evaluación:** Extraer métricas de rendimiento (por ejemplo, RMSE o R²) para evaluar el modelo con los datos de prueba.
+- **Evaluación:** Extraer métricas de rendimiento (R²) para evaluar el modelo con los datos de prueba.
 
 ## 📂 Estructura del Repositorio
 ```
@@ -45,7 +45,7 @@ El objetivo es construir un modelo de regresión para predecir el Happiness Scor
 
 - 🐍 Python 3.8+
 - 📓 Jupyter Notebook
-- 📊 Scikit-learn y CatBoost (para modelado)
+- 📊 Scikit-learn
 - 📡 Kafka (para streaming de datos)
 - 🗄️ Base de datos (PostgreSQL)
 - 📄 Archivos CSV

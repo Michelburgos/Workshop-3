@@ -1,4 +1,4 @@
-# Workshop-3: Predicción del Índice de Felicidad con Machine Learning y Streaming 📊  
+# Workshop-3: Predicción del Índice de Felicidad con Machine Learning y Streaming  
 Este proyecto combina análisis de datos, aprendizaje automático y streaming de datos para predecir el Happiness Score de países utilizando datos del World Happiness Report (2015-2019). A través de Jupyter Notebooks, scripts de Python, Kafka para streaming y una base de datos, exploramos, procesamos y modelamos datos para entender qué hace felices a las naciones. 
 
 ## Objetivo del Proyecto
@@ -11,7 +11,7 @@ El objetivo es construir un modelo de regresión para predecir el Happiness Scor
 - **Predicciones y Almacenamiento:** Usar el modelo entrenado para predecir el Happiness Score en el conjunto de prueba y almacenar las predicciones junto con las características en una base de datos.
 - **Evaluación:** Extraer métricas de rendimiento (R²) para evaluar el modelo con los datos de prueba.
 
-## 📂 Estructura del Repositorio
+## Estructura del Repositorio
 ```
 
 ├── Dockerfile                
@@ -41,17 +41,17 @@ El objetivo es construir un modelo de regresión para predecir el Happiness Scor
 
 ````
 
-## 🚀 Tecnologías Utilizadas
+## Tecnologías Utilizadas
 
-- 🐍 Python 3.8+
-- 📓 Jupyter Notebook
-- 📊 Scikit-learn
-- 📡 Kafka (para streaming de datos)
-- 🗄️ Base de datos (PostgreSQL)
-- 📄 Archivos CSV
-- 🐳 Docker y Docker Compose
+- Python 3.8+
+- Jupyter Notebook
+- Scikit-learn
+- Kafka (para streaming de datos)
+- Base de datos (PostgreSQL)
+- Archivos CSV
+- Docker y Docker Compose
 
-## 📋 Requisitos Previos
+## Requisitos Previos
 
 Para ejecutar el proyecto, asegúrate de tener instalado:
 
@@ -61,7 +61,7 @@ Para ejecutar el proyecto, asegúrate de tener instalado:
 - Git
 - Kafka (incluido en docker-compose.yml)
 
-## 🛠️ Instalación
+## Instalación
 
 Sigue estos pasos para configurar el proyecto:
 
@@ -84,7 +84,7 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-**📋 Contenido de requirements.txt:**
+**Contenido de requirements.txt:**
 
 ```
 pandas
@@ -129,59 +129,59 @@ Esto inicia Kafka Y Zookeeper. Asegúrate de que los puertos (por ejemplo, 9092 
    PG_DATABASE_DIMENSIONAL=<la_db_de_merge>
    ```
 
-## 🎯 Cómo Ejecutar el Proyecto
+## Cómo Ejecutar el Proyecto
 
-1. **📊 Análisis Exploratorio de Datos (EDA):**
+1. **Análisis Exploratorio de Datos (EDA):**
 
    ```bash
    jupyter notebook notebooks/001-EDA.ipynb
    ```
 
-2. **🧹 Preprocesamiento de Datos (ETL):**
+2. **Preprocesamiento de Datos (ETL):**
 
    ```bash
    python scripts/feature_selection.py
    ```
 
-3. **🤖 Entrenamiento del Modelo:**
+3. **Entrenamiento del Modelo:**
 
    ```bash
    jupyter notebook notebooks/002-training.ipynb
    ```
 
-4. **📡 Streaming con Kafka:**
+4. **Streaming con Kafka:**
 
    ```bash
    python scripts/producer.py
    python scripts/consumer.py
    ```
 
-5. **📈 Evaluación del Modelo:**
+5. **Evaluación del Modelo:**
 
    ```bash
    jupyter notebook notebooks/003-evaluation.ipynb
    ```
 
-6. **🗄️ Configuración de la Base de Datos:**
+6. **Configuración de la Base de Datos:**
    Configura las credenciales en `database/db_connection.py`.
 
-## 📊 Datos
+## Datos
 
 El proyecto utiliza cinco archivos CSV del World Happiness Report (2015-2019) en `data/`, con características como:
 
-* 💰 PIB per cápita
-* 🩺 Esperanza de vida
-* 🤝 Apoyo social
-* 🕊️ Libertad
-* ⚖️ Percepción de corrupción
-* 😊 Happiness Score (variable objetivo)
+* PIB per cápita
+* Esperanza de vida
+* Apoyo social
+* Libertad
+* Percepción de corrupción
+* Happiness Score (variable objetivo)
 
-## 💡 Notas Importantes
+## Notas Importantes
 
 * Kafka: Asegúrate de que Kafka y Zookeeper estén corriendo (`docker-compose up -d`) antes de ejecutar `producer.py` o `consumer.py`.
 * Base de datos: Configura las credenciales en `db_connection.py`. 
 * Docker: Verifica que los puertos en `docker-compose.yml` no estén en uso.
-## 🧑‍💻 Autor
+## Autor
 
 **Michel Dahiana Burgos Santos**  
 Proyecto académico de Ingeniería de Datos e Inteligencia Artificial
